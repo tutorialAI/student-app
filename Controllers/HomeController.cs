@@ -105,13 +105,31 @@ namespace MobileStore.Controllers
         }
 
         [HttpPost("[controller]/students/{id:int}")]
-        public IActionResult UpdateStudents([FromBody] Student student)
+        public IActionResult UpdateStudents([FromBody] Student requestStudent)
         {
+            var existStudent = db.Students
+                                .Include(c => c.Courses)
+                                .FirstOrDefault(s => s.StudentId == requestStudent.StudentId);
 
-            db.Students.Update(student);
+            existStudent.FirstName = requestStudent.FirstName;
+            existStudent.LastName = requestStudent.LastName;
+
+            // 1. remove all except the "old"
+            existStudent.Courses.RemoveAll(sc => !requestStudent.Courses.Exists(
+                c => c.CourseId == sc.CourseId && existStudent.StudentId == requestStudent.StudentId
+               ));
+
+            // 2. remove all ids already in database from requestStudent
+            requestStudent.Courses.RemoveAll(sc => existStudent.Courses.Exists(
+                c => c.CourseId == sc.CourseId && existStudent.StudentId == requestStudent.StudentId
+                ));
+
+            // 3. add all nwe courses not yet seen in the database
+            existStudent.Courses.AddRange(requestStudent.Courses);
+
             db.SaveChanges();
 
-            return Ok(student.Courses.Count());
+            return Ok(existStudent.Courses.Count());
         }
     }
 }
